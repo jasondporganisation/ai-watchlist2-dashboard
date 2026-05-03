@@ -1,0 +1,35 @@
+# netlify.toml
+# Configuration file for Netlify deployment
+
+[build]
+  command = "npm run build"
+  functions = "netlify/functions"
+  publish = "public"
+
+[dev]
+  command = "npm run dev"
+  port = 8888
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Environment variables (set these in Netlify dashboard)
+# ALPHA_VANTAGE_KEY: Your Alpha Vantage API key (free tier available)
+# FINNHUB_KEY: Your Finnhub API key (recommended)
+# POLYGON_KEY: Your Polygon.io API key (optional)
+
+# API rate limits (recommended free tiers):
+# - Alpha Vantage: 5 requests/min (free)
+# - Finnhub: 60 requests/min (free)
+# - Polygon.io: 5 requests/min (free)
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "no-referrer-when-downgrade"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
