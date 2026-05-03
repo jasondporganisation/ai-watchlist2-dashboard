@@ -525,59 +525,101 @@
         let currentFilter = 'ALL';
         let liveData = {};
 
+        // Initialize with demo data as fallback
+        function initializeDemoData() {
+            stocks.forEach(stock => {
+                if (!liveData[stock.ticker]) {
+                    liveData[stock.ticker] = {
+                        price: stock.basePrice,
+                        change: 0,
+                        changePercent: 0,
+                        timestamp: new Date().toLocaleTimeString()
+                    };
+                }
+            });
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            initializeDemoData();
+            renderTable();
+            updateStats();
+            updateTime();
             fetchLivePrices();
             setInterval(fetchLivePrices, 3600000); // Refresh hourly
         });
 
+        // Cache to store prices so they persist across refreshes
+        let priceCache = {};
+        let lastUpdateTime = null;
+
         // Fetch live prices from Finnhub API
         async function fetchLivePrices() {
             try {
-                document.getElementById('status').textContent = 'Updating...';
+                document.getElementById('status').textContent = 'Fetching prices...';
                 
                 // Finnhub API Key
                 const apiKey = 'd7r992hr01qgahvct2r0d7r992hr01qgahvct2rg';
                 
+                let successCount = 0;
+                
                 // Fetch prices for each stock
                 for (const stock of stocks) {
                     try {
-                        // Use CORS proxy to avoid browser CORS issues
-                        const corsProxy = 'https://api.allorigins.win/get?url=';
+                        // Direct API call (no CORS proxy)
                         const finnhubUrl = `https://finnhub.io/api/v1/quote?symbol=${stock.ticker}&token=${apiKey}`;
                         
-                        const response = await fetch(corsProxy + encodeURIComponent(finnhubUrl));
-                        const corsData = await response.json();
+                        const response = await fetch(finnhubUrl);
                         
-                        // Parse the CORS response
-                        const data = JSON.parse(corsData.contents);
-                        
-                        if (data.c) {
-                            liveData[stock.ticker] = {
-                                price: data.c || 0,
-                                change: data.d || 0,
-                                changePercent: data.dp || 0,
-                                high: data.h || 0,
-                                low: data.l || 0,
-                                timestamp: new Date().toLocaleTimeString()
-                            };
+                        if (response.ok) {
+                            const data = await response.json();
+                            
+                            if (data.c) {
+                                priceCache[stock.ticker] = {
+                                    price: data.c,
+                                    change: data.d || 0,
+                                    changePercent: data.dp || 0,
+                                    high: data.h || 0,
+                                    low: data.l || 0,
+                                    timestamp: new Date().toLocaleTimeString()
+                                };
+                                liveData[stock.ticker] = priceCache[stock.ticker];
+                                successCount++;
+                            }
                         }
                     } catch (error) {
                         console.error(`Error fetching ${stock.ticker}:`, error);
-                        // Keep previous data if fetch fails
+                        // Use cached data if available
+                        if (priceCache[stock.ticker]) {
+                            liveData[stock.ticker] = priceCache[stock.ticker];
+                        }
                     }
                     
-                    // Rate limiting: 100ms between requests
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Rate limiting: 50ms between requests
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
 
                 renderTable();
                 updateStats();
                 updateTime();
-                document.getElementById('status').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                lastUpdateTime = new Date();
+                
+                if (successCount > 0) {
+                    document.getElementById('status').textContent = `✓ Loaded ${successCount} stocks`;
+                } else if (Object.keys(liveData).length > 0) {
+                    document.getElementById('status').textContent = '✓ Using cached data';
+                } else {
+                    document.getElementById('status').textContent = '⚠ Connection error - using demo data';
+                }
             } catch (error) {
-                console.error('Error fetching prices:', error);
-                document.getElementById('status').textContent = 'API Error - Check console';
+                console.error('Error in fetchLivePrices:', error);
+                document.getElementById('status').textContent = '⚠ Error loading prices';
+                
+                // Fallback: show cached data if available
+                if (Object.keys(liveData).length > 0) {
+                    renderTable();
+                    updateStats();
+                }
             }
         }
 
