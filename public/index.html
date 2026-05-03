@@ -531,25 +531,30 @@
             setInterval(fetchLivePrices, 3600000); // Refresh hourly
         });
 
-        // Fetch live prices from API
+        // Fetch live prices from Finnhub API via Netlify Function
         async function fetchLivePrices() {
             try {
                 document.getElementById('status').textContent = 'Updating...';
                 
-                // Simulate API call to financial data provider
-                // In production, use: https://api.example.com/prices or similar
-                const tickers = stocks.map(s => s.ticker).join(',');
+                // Call Netlify serverless function
+                const response = await fetch('/.netlify/functions/stock-prices');
+                const result = await response.json();
                 
-                // For now, use mock data with realistic variations
-                stocks.forEach(stock => {
-                    const variation = (Math.random() - 0.5) * 0.08; // ±4%
-                    liveData[stock.ticker] = {
-                        price: stock.basePrice * (1 + variation),
-                        change: variation * 100,
-                        changePercent: variation * 100,
-                        timestamp: new Date().toLocaleTimeString()
-                    };
-                });
+                if (result.data) {
+                    // Store the real API data
+                    Object.assign(liveData, result.data);
+                } else {
+                    // Fallback: use mock data if API fails
+                    stocks.forEach(stock => {
+                        const variation = (Math.random() - 0.5) * 0.04;
+                        liveData[stock.ticker] = {
+                            price: stock.basePrice * (1 + variation),
+                            change: variation * stock.basePrice,
+                            changePercent: variation * 100,
+                            timestamp: new Date().toLocaleTimeString()
+                        };
+                    });
+                }
 
                 renderTable();
                 updateStats();
@@ -558,6 +563,12 @@
             } catch (error) {
                 console.error('Error fetching prices:', error);
                 document.getElementById('status').textContent = 'Connection error';
+                
+                // Still render with cached data if available
+                if (Object.keys(liveData).length > 0) {
+                    renderTable();
+                    updateStats();
+                }
             }
         }
 
