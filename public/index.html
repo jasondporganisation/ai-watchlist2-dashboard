@@ -531,44 +531,53 @@
             setInterval(fetchLivePrices, 3600000); // Refresh hourly
         });
 
-        // Fetch live prices from Finnhub API via Netlify Function
+        // Fetch live prices from Finnhub API
         async function fetchLivePrices() {
             try {
                 document.getElementById('status').textContent = 'Updating...';
                 
-                // Call Netlify serverless function
-                const response = await fetch('/.netlify/functions/stock-prices');
-                const result = await response.json();
+                // Finnhub API Key
+                const apiKey = 'd7r992hr01qgahvct2r0d7r992hr01qgahvct2rg';
                 
-                if (result.data) {
-                    // Store the real API data
-                    Object.assign(liveData, result.data);
-                } else {
-                    // Fallback: use mock data if API fails
-                    stocks.forEach(stock => {
-                        const variation = (Math.random() - 0.5) * 0.04;
-                        liveData[stock.ticker] = {
-                            price: stock.basePrice * (1 + variation),
-                            change: variation * stock.basePrice,
-                            changePercent: variation * 100,
-                            timestamp: new Date().toLocaleTimeString()
-                        };
-                    });
+                // Fetch prices for each stock
+                for (const stock of stocks) {
+                    try {
+                        // Use CORS proxy to avoid browser CORS issues
+                        const corsProxy = 'https://api.allorigins.win/get?url=';
+                        const finnhubUrl = `https://finnhub.io/api/v1/quote?symbol=${stock.ticker}&token=${apiKey}`;
+                        
+                        const response = await fetch(corsProxy + encodeURIComponent(finnhubUrl));
+                        const corsData = await response.json();
+                        
+                        // Parse the CORS response
+                        const data = JSON.parse(corsData.contents);
+                        
+                        if (data.c) {
+                            liveData[stock.ticker] = {
+                                price: data.c || 0,
+                                change: data.d || 0,
+                                changePercent: data.dp || 0,
+                                high: data.h || 0,
+                                low: data.l || 0,
+                                timestamp: new Date().toLocaleTimeString()
+                            };
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching ${stock.ticker}:`, error);
+                        // Keep previous data if fetch fails
+                    }
+                    
+                    // Rate limiting: 100ms between requests
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
                 renderTable();
                 updateStats();
                 updateTime();
-                document.getElementById('status').textContent = 'Updated just now';
+                document.getElementById('status').textContent = 'Updated: ' + new Date().toLocaleTimeString();
             } catch (error) {
                 console.error('Error fetching prices:', error);
-                document.getElementById('status').textContent = 'Connection error';
-                
-                // Still render with cached data if available
-                if (Object.keys(liveData).length > 0) {
-                    renderTable();
-                    updateStats();
-                }
+                document.getElementById('status').textContent = 'API Error - Check console';
             }
         }
 
